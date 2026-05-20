@@ -49,8 +49,7 @@ select:focus,input:focus{border-color:var(--accent)}
 </div>
 
 <div class="container">
-  <div class="grid-2">
-    <div class="card">
+  <div class="card">
       <h2>⚡ 电价监控面板</h2>
       <p style="margin-bottom:12px">数据更新于 <span id="price-updated" style="color:var(--accent)">加载中...</span></p>
       <div class="toolbar">
@@ -114,19 +113,6 @@ select:focus,input:focus{border-color:var(--accent)}
       <div class="chart-container"><canvas id="price-chart"></canvas></div>
       <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;text-align:center" id="price-stats"></div>
     </div>
-    <div class="card">
-      <h2>📋 电价说明</h2>
-      <p style="font-size:12px;line-height:1.7">
-        <b>现货日前电价</b>：各省电力交易中心发布的日前市场出清价格，15min/30min 粒度。<br>
-        <b>现货实时电价</b>：实时市场出清价格，波动大于日前。<br>
-        <b>代理购电价格</b>：电网企业每月公布的代理购电价格，按月更新。<br>
-        <b>中长期电价</b>：月度中长期交易均价。<br><br>
-        数据来源：NAS InfluxDB（<a href="http://192.168.1.89:8086" style="color:var(--accent);text-decoration:none" target="_blank">192.168.1.89:8086</a>）<br>
-        数据由定时任务抓取更新。
-      </p>
-      <div id="price-summary" style="margin-top:12px;font-size:12px;line-height:1.8;color:var(--text-secondary)"></div>
-    </div>
-  </div>
   <div class="card" id="price-compare" style="display:none">
     <h2>📊 日前 vs 实时对比</h2>
     <div class="chart-container-sm"><canvas id="price-compare-chart"></canvas></div>
@@ -151,6 +137,18 @@ select:focus,input:focus{border-color:var(--accent)}
     </div>
     <div class="chart-container" style="height:480px"><canvas id="cmp-chart"></canvas></div>
   </div>
+  <div class="card">
+      <h2>📋 电价说明</h2>
+      <p style="font-size:12px;line-height:1.7">
+        <b>现货日前电价</b>：各省电力交易中心发布的日前市场出清价格，15min/30min 粒度。<br>
+        <b>现货实时电价</b>：实时市场出清价格，波动大于日前。<br>
+        <b>代理购电价格</b>：电网企业每月公布的代理购电价格，按月更新。<br>
+        <b>中长期电价</b>：月度中长期交易均价。<br><br>
+        数据来源：NAS InfluxDB（<a href="http://192.168.1.89:8086" style="color:var(--accent);text-decoration:none" target="_blank">192.168.1.89:8086</a>）<br>
+        数据由定时任务抓取更新。
+      </p>
+      <div id="price-summary" style="margin-top:12px;font-size:12px;line-height:1.8;color:var(--text-secondary)"></div>
+    </div>
 </div>
 
 <script>
