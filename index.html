@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ 电价监控 · Price Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg-primary:#0f1117;--bg-secondary:#1a1d28;--bg-card:#222639;--bg-input:#1e2235;--text-primary:#e8eaed;--text-secondary:#9aa0b0;--accent:#4fc3f7;--accent2:#81c784;--accent3:#ffb74d;--accent-red:#e57373;--border:#2d3148;--radius:12px;--radius-sm:8px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;line-height:1.6}
+.header{background:linear-gradient(135deg,#1a237e,#0d47a1,#01579b);padding:24px 32px}
+.header h1{font-size:24px;color:#fff}.header h1 span{color:var(--accent)}
+.header p{color:rgba(255,255,255,.7);font-size:13px;margin-top:4px}
+.container{max-width:1200px;margin:0 auto;padding:16px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card h2{font-size:16px;font-weight:600;margin-bottom:14px}
+.card p{color:var(--text-secondary);font-size:13px;margin-bottom:8px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:860px){.grid-2{grid-template-columns:1fr}}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text-secondary)}
+select,input{width:100%;padding:9px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--accent);color:#000}.btn-primary:hover{background:#6dd0fa}
+.btn-secondary{background:var(--border);color:var(--text-primary)}
+.chart-container{position:relative;height:360px;width:100%;margin:12px 0}
+.chart-container-sm{position:relative;height:280px;width:100%;margin:12px 0}
+.alert{padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:12px}
+.alert-info{background:rgba(79,195,247,.12);border:1px solid rgba(79,195,247,.3);color:var(--accent)}
+.alert-warning{background:rgba(255,183,77,.12);border:1px solid rgba(255,183,77,.3);color:var(--accent3)}
+.alert-error{background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.3);color:var(--accent-red)}
+.stat-row{display:flex;gap:12px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:120px;background:var(--bg-input);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);text-align:center}
+.stat-card .value{font-size:22px;font-weight:700;color:var(--accent)}
+.stat-card .label{font-size:10px;color:var(--text-secondary);margin-top:2px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.toolbar select{width:auto;min-width:120px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)}
+.spinner{width:24px;height:24px;border:3px solid var(--border);border-top:3px solid var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ 电价监控 <span>· Price Monitor</span></h1>
+  <p>基于 InfluxDB 现货 / 代理购电 / 中长期数据 · 数据来源 NAS</p>
+</div>
+
+<div class="container">
+  <div class="grid-2">
+    <div class="card">
+      <h2>⚡ 电价监控面板</h2>
+      <p style="margin-bottom:12px">数据更新于 <span id="price-updated" style="color:var(--accent)">加载中...</span></p>
+      <div class="toolbar">
+        <select id="price-province">
+          <optgroup label="🏛️ 华东">
+            <option value="江苏" selected>江苏</option>
+            <option value="浙江">浙江</option>
+            <option value="安徽">安徽</option>
+            <option value="福建">福建</option>
+            <option value="山东">山东</option>
+            <option value="上海">上海</option>
+            <option value="江西">江西</option>
+          </optgroup>
+          <optgroup label="🏛️ 南方">
+            <option value="广东">广东</option>
+            <option value="广西">广西</option>
+            <option value="云南">云南</option>
+            <option value="贵州">贵州</option>
+            <option value="海南">海南</option>
+          </optgroup>
+          <optgroup label="🏛️ 华中">
+            <option value="河南">河南</option>
+            <option value="湖北">湖北</option>
+            <option value="湖南">湖南</option>
+          </optgroup>
+          <optgroup label="🏛️ 华北">
+            <option value="山西">山西</option>
+            <option value="宁夏">宁夏</option>
+            <option value="青海">青海</option>
+            <option value="陕西">陕西</option>
+          </optgroup>
+          <optgroup label="🏛️ 东北">
+            <option value="辽宁">辽宁</option>
+            <option value="吉林">吉林</option>
+            <option value="黑龙江">黑龙江</option>
+          </optgroup>
+          <optgroup label="🏛️ 西南">
+            <option value="四川">四川</option>
+          </optgroup>
+        </select>
+        <select id="price-type">
+          <option value="spot">⚡ 现货日前</option>
+          <option value="spot_rt">🔴 现货实时</option>
+          <option value="spot_both">📊 日前+实时对比</option>
+          <option value="agent">📊 代理购电（月）</option>
+          <option value="mid_long">📈 中长期（月）</option>
+        </select>
+        <select id="price-range">
+          <option value="1">最近 1 天</option>
+          <option value="3">最近 3 天</option>
+          <option value="7" selected>最近 7 天</option>
+          <option value="30">最近 30 天</option>
+          <option value="90">最近 90 天</option>
+        </select>
+        <button class="btn btn-primary" id="btn-price-refresh" style="padding:6px 14px;font-size:12px">🔄 刷新数据</button>
+      </div>
+      <div class="chart-container"><canvas id="price-chart"></canvas></div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;text-align:center" id="price-stats"></div>
+    </div>
+    <div class="card">
+      <h2>📋 电价说明</h2>
+      <p style="font-size:12px;line-height:1.7">
+        <b>现货日前电价</b>：各省电力交易中心发布的日前市场出清价格，15min/30min 粒度。<br>
+        <b>现货实时电价</b>：实时市场出清价格，波动大于日前。<br>
+        <b>代理购电价格</b>：电网企业每月公布的代理购电价格，按月更新。<br>
+        <b>中长期电价</b>：月度中长期交易均价。<br><br>
+        数据来源：NAS InfluxDB（<a href="http://192.168.1.89:8086" style="color:var(--accent);text-decoration:none" target="_blank">192.168.1.89:8086</a>）<br>
+        数据由定时任务抓取更新。
+      </p>
+      <div id="price-summary" style="margin-top:12px;font-size:12px;line-height:1.8;color:var(--text-secondary)"></div>
+    </div>
+  </div>
+  <div class="card" id="price-compare" style="display:none">
+    <h2>📊 日前 vs 实时对比</h2>
+    <div class="chart-container-sm"><canvas id="price-compare-chart"></canvas></div>
+  </div>
+</div>
+
+<script>
+// ======================== PRICE MONITOR ========================
+let PRICE_DATA = null;
+let PRICE_CHART = null;
+let PRICE_COMPARE = null;
+
+async function init() {
+  await loadData();
+  document.getElementById('btn-price-refresh').onclick = () => { PRICE_DATA = null; loadData(); renderChart(); };
+  document.getElementById('price-province').onchange = renderChart;
+  document.getElementById('price-type').onchange = renderChart;
+  document.getElementById('price-range').onchange = renderChart;
+}
+
+async function loadData() {
+  document.getElementById('price-updated').textContent = '加载数据中...';
+  try {
+    const r = await fetch('price_data.json?t=' + Date.now());
+    PRICE_DATA = await r.json();
+    document.getElementById('price-updated').textContent = PRICE_DATA.generated_at;
+    renderChart();
+  } catch(e) {
+    document.getElementById('price-updated').textContent = '❌ 加载失败: ' + e.message;
+  }
+}
+
+function renderChart() {
+  if (!PRICE_DATA) return;
+  const prov = document.getElementById('price-province').value;
+  const type = document.getElementById('price-type').value;
+  const range = parseInt(document.getElementById('price-range').value);
+
+  const spot = PRICE_DATA.spot.find(s => s.province === prov) || { day_ahead: [], real_time: [] };
+  const agent = PRICE_DATA.agent.find(a => a.province === prov);
+  const midLong = PRICE_DATA.mid_long.find(m => m.province === prov);
+
+  const ctx = document.getElementById('price-chart').getContext('2d');
+  const cmpCtx = document.getElementById('price-compare-chart').getContext('2d');
+  if (PRICE_CHART) { PRICE_CHART.destroy(); PRICE_CHART = null; }
+  if (PRICE_COMPARE) { PRICE_COMPARE.destroy(); PRICE_COMPARE = null; }
+  document.getElementById('price-compare').style.display = 'none';
+
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - range * 24 * 60 * 60 * 1000);
+
+  function filterByRange(records) {
+    return records.filter(r => new Date(r.t.replace(' ', 'T') + ':00') >= cutoff);
+  }
+
+  if (type === 'spot' || type === 'spot_rt') {
+    const priceKey = type === 'spot' ? 'day_ahead' : 'real_time';
+    const records = filterByRange(spot[priceKey] || []);
+    if (records.length === 0) {
+      document.getElementById('price-stats').textContent = '⚠️ 该省份/时段无 ' + (type === 'spot' ? '日前' : '实时') + ' 数据';
+      return;
+    }
+    const labels = records.map(r => r.t);
+    const prices = records.map(r => r.p);
+    const avg = (prices.reduce((a,b) => a+b, 0) / prices.length).toFixed(1);
+    document.getElementById('price-stats').textContent = `📊 ${prov} 现货${type === 'spot' ? '日前' : '实时'} · 均价 ${avg} 元/MWh · 最低 ${Math.min(...prices).toFixed(1)} · 最高 ${Math.max(...prices).toFixed(1)} · ${records.length} 个数据点`;
+    PRICE_CHART = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: type === 'spot' ? '日前电价' : '实时电价',
+          data: prices,
+          borderColor: type === 'spot' ? '#4fc3f7' : '#e57373',
+          backgroundColor: type === 'spot' ? 'rgba(79,195,247,0.1)' : 'rgba(229,115,115,0.1)',
+          borderWidth: 1.5, fill: true, tension: 0.2, pointRadius: 0, pointHitRadius: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9aa0b0', font: { size: 11 } } }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { ticks: { color: '#9aa0b0', font: { size: 9 }, maxTicksLimit: 12, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: '元/MWh', color: '#9aa0b0', font: { size: 10 } } }
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false }
+      }
+    });
+  } else if (type === 'spot_both') {
+    // Compare day_ahead + real_time
+    const da = filterByRange(spot.day_ahead || []);
+    const rt = filterByRange(spot.real_time || []);
+    if (da.length === 0 && rt.length === 0) {
+      document.getElementById('price-stats').textContent = '⚠️ 该省份/时段无日前或实时数据';
+      return;
+    }
+    const timeMap = {};
+    da.forEach(r => { timeMap[r.t] = { da: r.p }; });
+    rt.forEach(r => { if (!timeMap[r.t]) timeMap[r.t] = {}; timeMap[r.t].rt = r.p; });
+    const times = Object.keys(timeMap).sort();
+    document.getElementById('price-stats').textContent = `📊 ${prov} 日前 + 实时对比 · ${times.length} 个时间点`;
+    PRICE_CHART = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: times,
+        datasets: [
+          { label: '日前', data: times.map(t => timeMap[t].da || null), borderColor: '#4fc3f7', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+          { label: '实时', data: times.map(t => timeMap[t].rt || null), borderColor: '#e57373', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9aa0b0', font: { size: 11 } } }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { ticks: { color: '#9aa0b0', font: { size: 9 }, maxTicksLimit: 12, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: '元/MWh', color: '#9aa0b0', font: { size: 10 } } }
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false }
+      }
+    });
+  } else if (type === 'agent') {
+    const records = agent ? agent.records || [] : [];
+    if (records.length === 0) {
+      document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 无代理购电数据';
+      return;
+    }
+    document.getElementById('price-stats').textContent = `📊 ${prov} 代理购电价格 · ${records.length} 个月`;
+    PRICE_CHART = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: records.map(r => r.t),
+        datasets: [{
+          label: '代理购电价格',
+          data: records.map(r => r.purchasingPrice !== undefined ? (r.purchasingPrice * 1000) : null),
+          backgroundColor: 'rgba(129,199,132,0.6)', borderColor: '#81c784', borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9aa0b0', font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#9aa0b0', font: { size: 9 }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: '元/MWh', color: '#9aa0b0', font: { size: 10 } } }
+        }
+      }
+    });
+  } else if (type === 'mid_long') {
+    const records = midLong ? midLong.records || [] : [];
+    if (records.length === 0) {
+      document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 无中长期数据';
+      return;
+    }
+    document.getElementById('price-stats').textContent = `📈 ${prov} 中长期电价 · ${records.length} 条`;
+    PRICE_CHART = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: records.map(r => r.t),
+        datasets: [{
+          label: '中长期电价',
+          data: records.map(r => r.p),
+          backgroundColor: 'rgba(255,183,77,0.6)', borderColor: '#ffb74d', borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#9aa0b0', font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#9aa0b0', font: { size: 9 }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: '元/MWh', color: '#9aa0b0', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  // Summary stats
+  let summaryHtml = '<b>📊 数据概览</b><br>';
+  if (spot) {
+    summaryHtml += `现货日前: ${spot.day_ahead.length} 条记录<br>`;
+    summaryHtml += `现货实时: ${spot.real_time.length} 条记录<br>`;
+  }
+  if (agent) summaryHtml += `代理购电: ${agent.records.length} 个月<br>`;
+  if (midLong) summaryHtml += `中长期: ${midLong.records.length} 条<br>`;
+  document.getElementById('price-summary').innerHTML = summaryHtml;
+}
+
+init();
+</script>
+</body>
+</html>
