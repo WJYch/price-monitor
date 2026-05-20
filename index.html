@@ -594,6 +594,11 @@ function renderCompareChart() {
                   index: i
                 }));
               }
+            },
+            onClick: function(e, legendItem, legend) {
+              const ds = legend.chart.data.datasets[legendItem.datasetIndex];
+              ds.hidden = !ds.hidden;
+              legend.chart.update();
             }
           },
           tooltip: { mode: 'index', intersect: false }
