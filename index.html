@@ -585,20 +585,26 @@ function renderCompareChart() {
             labels: {
               color: '#9aa0b0', font: { size: 10 },
               generateLabels: function(chart) {
-                return chart.data.datasets.map((ds, i) => ({
-                  text: ds.label,
-                  fillStyle: ds.hidden ? '#444' : ds.borderColor,
-                  strokeStyle: ds.hidden ? '#444' : ds.borderColor,
-                  hidden: ds.hidden,
-                  datasetIndex: i,
-                  index: i
-                }));
+                return chart.data.datasets.map((ds, i) => {
+                  const visible = chart.isDatasetVisible(i);
+                  return {
+                    text: ds.label,
+                    fillStyle: visible ? ds.borderColor : '#444',
+                    strokeStyle: visible ? ds.borderColor : '#444',
+                    hidden: !visible,
+                    datasetIndex: i,
+                    index: i
+                  };
+                });
               }
             },
             onClick: function(e, legendItem, legend) {
-              const ds = legend.chart.data.datasets[legendItem.datasetIndex];
-              ds.hidden = !ds.hidden;
-              legend.chart.update();
+              const idx = legendItem.datasetIndex;
+              if (legend.chart.isDatasetVisible(idx)) {
+                legend.chart.hide(idx);
+              } else {
+                legend.chart.show(idx);
+              }
             }
           },
           tooltip: { mode: 'index', intersect: false }
