@@ -107,9 +107,12 @@ select:focus,input:focus{border-color:var(--accent)}
           <option value="3">最近 3 天</option>
           <option value="7" selected>最近 7 天</option>
           <option value="30">最近 30 天</option>
-          <option value="90">最近 90 天</option>
           <option value="365">最近 365 天</option>
+          <option value="all">全部</option>
         </select>
+        <input type="date" id="price-start" style="width:auto;min-width:120px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
+        <span style="color:var(--text-secondary);font-size:12px">～</span>
+        <input type="date" id="price-end" style="width:auto;min-width:120px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
         <button class="btn btn-primary" id="btn-price-refresh" style="padding:6px 14px;font-size:12px">🔄 刷新数据</button>
       </div>
       <div class="chart-container"><canvas id="price-chart"></canvas></div>
@@ -147,11 +150,49 @@ let PRICE_COMPARE = null;
 let PRICE_COMPARE_PROV = null;
 
 async function init() {
+  // Date range sync
+  const rangeEl = document.getElementById('price-range');
+  const startEl = document.getElementById('price-start');
+  const endEl = document.getElementById('price-end');
+  function syncDatesFromRange() {
+    const val = parseInt(rangeEl.value);
+    if (rangeEl.value === 'all') { startEl.value = ''; endEl.value = ''; return; }
+    if (isNaN(val)) return;
+    const now = new Date();
+    const d = new Date(now.getTime() - val * 24 * 60 * 60 * 1000);
+    startEl.value = d.toISOString().slice(0,10);
+    endEl.value = now.toISOString().slice(0,10);
+  }
+  rangeEl.onchange = () => { syncDatesFromRange(); renderChart(); };
+  startEl.onchange = () => { rangeEl.value = 'all'; renderChart(); };
+  endEl.onchange = () => { rangeEl.value = 'all'; renderChart(); };
+  syncDatesFromRange();
+
+  // Load data
   await loadData();
   document.getElementById('btn-price-refresh').onclick = () => { PRICE_DATA = null; loadData(); renderChart(); };
   document.getElementById('price-province').onchange = renderChart;
   document.getElementById('price-type').onchange = renderChart;
-  document.getElementById('price-range').onchange = renderChart;
+}
+
+// Unified time filter: works for spot (YYYY-MM-DD HH:MM) and agent/mid_long (YYYY-MM-DD)
+function getTimeRange() {
+  const s = document.getElementById('price-start').value;
+  const e = document.getElementById('price-end').value;
+  return { start: s ? new Date(s + 'T00:00:00') : null, end: e ? new Date(e + 'T23:59:59') : null };
+}
+function filterByTime(records) {
+  const tr = getTimeRange();
+  if (!tr.start && !tr.end) return records;
+  return records.filter(r => {
+    // dateStr is either "2026-04-20 12:45" (spot) or "2024-06-01" (agent/mid_long)
+    const dateStr = r.t;
+    const t = dateStr.includes(' ') ? new Date(dateStr.replace(' ','T')+':00') :
+              dateStr.length === 10 ? new Date(dateStr + 'T00:00:00') : new Date(dateStr);
+    if (tr.start && t < tr.start) return false;
+    if (tr.end && t > tr.end) return false;
+    return true;
+  });
 }
 
 async function loadData() {
@@ -170,7 +211,6 @@ function renderChart() {
   if (!PRICE_DATA) return;
   const prov = document.getElementById('price-province').value;
   const type = document.getElementById('price-type').value;
-  const range = parseInt(document.getElementById('price-range').value);
 
   const spot = PRICE_DATA.spot.find(s => s.province === prov) || { day_ahead: [], real_time: [] };
   const agent = PRICE_DATA.agent.find(a => a.province === prov);
@@ -182,16 +222,9 @@ function renderChart() {
   if (PRICE_COMPARE) { PRICE_COMPARE.destroy(); PRICE_COMPARE = null; }
   document.getElementById('price-compare').style.display = 'none';
 
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - range * 24 * 60 * 60 * 1000);
-
-  function filterByRange(records) {
-    return records.filter(r => new Date(r.t.replace(' ', 'T') + ':00') >= cutoff);
-  }
-
   if (type === 'spot' || type === 'spot_rt') {
     const priceKey = type === 'spot' ? 'day_ahead' : 'real_time';
-    const records = filterByRange(spot[priceKey] || []);
+    const records = filterByTime(spot[priceKey] || []);
     if (records.length === 0) {
       document.getElementById('price-stats').textContent = '⚠️ 该省份/时段无 ' + (type === 'spot' ? '日前' : '实时') + ' 数据';
       return;
@@ -224,8 +257,8 @@ function renderChart() {
     });
   } else if (type === 'spot_both') {
     // Compare day_ahead + real_time
-    const da = filterByRange(spot.day_ahead || []);
-    const rt = filterByRange(spot.real_time || []);
+    const da = filterByTime(spot.day_ahead || []);
+    const rt = filterByTime(spot.real_time || []);
     if (da.length === 0 && rt.length === 0) {
       document.getElementById('price-stats').textContent = '⚠️ 该省份/时段无日前或实时数据';
       return;
@@ -255,9 +288,9 @@ function renderChart() {
       }
     });
   } else if (type === 'agent') {
-    const records = agent ? agent.records || [] : [];
+    const records = filterByTime(agent ? agent.records || [] : []);
     if (records.length === 0) {
-      document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 无代理购电数据';
+      document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 该时段无代理购电数据';
       return;
     }
     document.getElementById('price-stats').textContent = `📊 ${prov} 代理购电价格 · ${records.length} 个月`;
@@ -281,9 +314,9 @@ function renderChart() {
       }
     });
   } else if (type === 'mid_long') {
-    const records = midLong ? midLong.records || [] : [];
+    const records = filterByTime(midLong ? midLong.records || [] : []);
     if (records.length === 0) {
-      document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 无中长期数据';
+      document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 该时段无中长期数据';
       return;
     }
     document.getElementById('price-stats').textContent = `📈 ${prov} 中长期电价 · ${records.length} 条`;
@@ -335,7 +368,7 @@ function renderChart() {
     if (type === 'compare_da' || type === 'compare_rt') {
       const priceKey = type === 'compare_da' ? 'day_ahead' : 'real_time';
       PRICE_DATA.spot.forEach(s => {
-        const recs = (s[priceKey] || []).filter(r => new Date(r.t.replace(' ','T')+':00') >= cutoff);
+        const recs = filterByTime(s[priceKey] || []);
         if (recs.length > 0) {
           const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
           provData.push({ prov: s.province, avg, region: provRegion[s.province] || '其他', count: recs.length });
