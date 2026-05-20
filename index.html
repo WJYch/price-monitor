@@ -447,7 +447,7 @@ function renderCompareChart() {
       });
     } else if (cmpType === 'agent') {
       PRICE_DATA.agent.forEach(a => {
-        const recs = a.records || [];
+        const recs = filterByCompareTime(a.records || []);
         if (recs.length > 0) {
           const vals = recs.filter(r => r.purchasingPrice != null).map(r => normalizeMwh(r.purchasingPrice));
           if (vals.length > 0) {
@@ -458,7 +458,7 @@ function renderCompareChart() {
       });
     } else if (cmpType === 'mid_long') {
       PRICE_DATA.mid_long.forEach(m => {
-        const recs = m.records || [];
+        const recs = filterByCompareTime(m.records || []);
         if (recs.length > 0) {
           const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
           provData.push({ prov: m.province, avg, region: provRegion[m.province] || '其他', count: recs.length });
@@ -590,6 +590,7 @@ function renderCompareChart() {
                   fillStyle: ds.hidden ? '#444' : ds.borderColor,
                   strokeStyle: ds.hidden ? '#444' : ds.borderColor,
                   hidden: ds.hidden,
+                  datasetIndex: i,
                   index: i
                 }));
               }
