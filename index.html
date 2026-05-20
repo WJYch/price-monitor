@@ -97,10 +97,6 @@ select:focus,input:focus{border-color:var(--accent)}
           <option value="spot_both">📊 日前+实时对比</option>
           <option value="agent">📊 代理购电（月）</option>
           <option value="mid_long">📈 中长期（月）</option>
-          <option value="compare_da">🏛️ 各省对比（日前均价）</option>
-          <option value="compare_rt">🏛️ 各省对比（实时均价）</option>
-          <option value="compare_agent">🏛️ 各省对比（代理购电）</option>
-          <option value="compare_mid_long">🏛️ 各省对比（中长期）</option>
         </select>
         <select id="price-range">
           <option value="1">最近 1 天</option>
@@ -135,10 +131,22 @@ select:focus,input:focus{border-color:var(--accent)}
     <h2>📊 日前 vs 实时对比</h2>
     <div class="chart-container-sm"><canvas id="price-compare-chart"></canvas></div>
   </div>
-  <div class="card" id="price-compare-prov" style="display:none">
-    <h2>🏛️ 各省电价横向对比</h2>
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px" id="compare-prov-stats"></div>
-    <div class="chart-container" style="height:520px"><canvas id="price-compare-prov-chart"></canvas></div>
+  <div class="card" id="compare-section" style="margin-top:16px">
+    <h2>🏛️ 各省对比 <span style="font-size:12px;color:var(--text-secondary);font-weight:400">— 逐月/逐日对比 · 均值对比</span></h2>
+    <div class="toolbar">
+      <select id="cmp-type">
+        <option value="da">⚡ 日前</option>
+        <option value="rt">🔴 实时</option>
+        <option value="agent">📊 代理购电</option>
+        <option value="mid_long">📈 中长期</option>
+      </select>
+      <select id="cmp-mode">
+        <option value="avg">📊 均值对比</option>
+        <option value="ts">📈 时序对比</option>
+      </select>
+      <div style="font-size:12px;color:var(--text-secondary)" id="cmp-stats"></div>
+    </div>
+    <div class="chart-container" style="height:480px"><canvas id="cmp-chart"></canvas></div>
   </div>
 </div>
 
@@ -147,7 +155,6 @@ select:focus,input:focus{border-color:var(--accent)}
 let PRICE_DATA = null;
 let PRICE_CHART = null;
 let PRICE_COMPARE = null;
-let PRICE_COMPARE_PROV = null;
 
 async function init() {
   // Date range sync
@@ -173,6 +180,9 @@ async function init() {
   document.getElementById('btn-price-refresh').onclick = () => { PRICE_DATA = null; loadData(); renderChart(); };
   document.getElementById('price-province').onchange = renderChart;
   document.getElementById('price-type').onchange = renderChart;
+  // Compare section
+  document.getElementById('cmp-type').onchange = renderCompareChart;
+  document.getElementById('cmp-mode').onchange = renderCompareChart;
 }
 
 // Unified time filter: works for spot (YYYY-MM-DD HH:MM) and agent/mid_long (YYYY-MM-DD)
@@ -185,7 +195,6 @@ function filterByTime(records) {
   const tr = getTimeRange();
   if (!tr.start && !tr.end) return records;
   return records.filter(r => {
-    // dateStr is either "2026-04-20 12:45" (spot) or "2024-06-01" (agent/mid_long)
     const dateStr = r.t;
     const t = dateStr.includes(' ') ? new Date(dateStr.replace(' ','T')+':00') :
               dateStr.length === 10 ? new Date(dateStr + 'T00:00:00') : new Date(dateStr);
@@ -193,6 +202,11 @@ function filterByTime(records) {
     if (tr.end && t > tr.end) return false;
     return true;
   });
+}
+// Agent data has mixed units (元/kWh and 元/MWh). Normalize to 元/kWh.
+function normalizeKwh(val) {
+  if (val === null || val === undefined) return null;
+  return val > 10 ? val / 1000 : val;
 }
 
 async function loadData() {
@@ -293,23 +307,27 @@ function renderChart() {
       document.getElementById('price-stats').textContent = '⚠️ ' + prov + ' 该时段无代理购电数据';
       return;
     }
-    document.getElementById('price-stats').textContent = `📊 ${prov} 代理购电价格 · ${records.length} 个月`;
+    const prices = records.map(r => normalizeKwh(r.purchasingPrice));
+    const avg = (prices.reduce((a,b) => a+b, 0) / prices.length).toFixed(4);
+    document.getElementById('price-stats').textContent = `📊 ${prov} 代理购电价格 · 均价 ${avg} 元/kWh · ${records.length} 个月`;
     PRICE_CHART = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: records.map(r => r.t),
         datasets: [{
-          label: '代理购电价格',
-          data: records.map(r => r.purchasingPrice !== undefined ? r.purchasingPrice : null),
+          label: '代理购电价格 (元/kWh)',
+          data: prices,
           backgroundColor: 'rgba(129,199,132,0.6)', borderColor: '#81c784', borderWidth: 1
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#9aa0b0', font: { size: 11 } } } },
+        plugins: { legend: { labels: { color: '#9aa0b0', font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ctx.raw.toFixed(4) + ' 元/kWh' } }
+        },
         scales: {
           x: { ticks: { color: '#9aa0b0', font: { size: 9 }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
-          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: '元/MWh', color: '#9aa0b0', font: { size: 10 } } }
+          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: '元/kWh', color: '#9aa0b0', font: { size: 10 } } }
         }
       }
     });
@@ -341,121 +359,11 @@ function renderChart() {
     });
   }
 
-  // ====== 各省横向对比 ======
-  if (type === 'compare_da' || type === 'compare_rt' || type === 'compare_agent' || type === 'compare_mid_long') {
-    document.getElementById('price-province').style.display = 'none';
-    document.getElementById('price-compare-prov').style.display = 'none';
-
-    const typeLabels = { compare_da: '日前均价', compare_rt: '实时均价', compare_agent: '代理购电', compare_mid_long: '中长期' };
-    const groupLabel = typeLabels[type] || '电价';
-
-    // Region color mapping
-    const regionColor = {
-      '华东': '#4fc3f7', '南方': '#81c784', '华中': '#ffb74d',
-      '华北': '#e57373', '东北': '#ba68c8', '西南': '#4dd0e1'
-    };
-    const provRegion = {
-      '江苏':'华东','浙江':'华东','安徽':'华东','福建':'华东','山东':'华东','上海':'华东','江西':'华东',
-      '广东':'南方','广西':'南方','云南':'南方','贵州':'南方','海南':'南方',
-      '河南':'华中','湖北':'华中','湖南':'华中',
-      '山西':'华北','宁夏':'华北','青海':'华北','陕西':'华北',
-      '辽宁':'东北','吉林':'东北','黑龙江':'东北',
-      '四川':'西南'
-    };
-
-    const provData = [];
-
-    if (type === 'compare_da' || type === 'compare_rt') {
-      const priceKey = type === 'compare_da' ? 'day_ahead' : 'real_time';
-      PRICE_DATA.spot.forEach(s => {
-        const recs = filterByTime(s[priceKey] || []);
-        if (recs.length > 0) {
-          const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
-          provData.push({ prov: s.province, avg, region: provRegion[s.province] || '其他', count: recs.length });
-        }
-      });
-    } else if (type === 'compare_agent') {
-      PRICE_DATA.agent.forEach(a => {
-        const recs = a.records || [];
-        if (recs.length > 0) {
-          const avg = recs.reduce((a,b)=>a+b.purchasingPrice,0) / recs.length;
-          provData.push({ prov: a.province, avg, region: provRegion[a.province] || '其他', count: recs.length });
-        }
-      });
-    } else if (type === 'compare_mid_long') {
-      PRICE_DATA.mid_long.forEach(m => {
-        const recs = m.records || [];
-        if (recs.length > 0) {
-          const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
-          provData.push({ prov: m.province, avg, region: provRegion[m.province] || '其他', count: recs.length });
-        }
-      });
-    }
-    provData.sort((a,b) => b.avg - a.avg);
-
-    if (provData.length === 0) {
-      document.getElementById('price-stats').textContent = '⚠️ 无可用对比数据';
-      document.getElementById('price-compare-prov').style.display = 'none';
-      return;
-    }
-
-    const nationalAvg = provData.reduce((a,b)=>a+b.avg,0) / provData.length;
-    const labels = provData.map(d => d.prov);
-    const prices = provData.map(d => d.avg);
-    const colors = provData.map(d => regionColor[d.region] || '#9aa0b0');
-
-    document.getElementById('compare-prov-stats').textContent =
-      `🏛️ ${provData.length} 省 · 全国均价 ${nationalAvg.toFixed(1)} 元/MWh · 最高 ${provData[0].prov} ${provData[0].avg.toFixed(1)} · 最低 ${provData[provData.length-1].prov} ${provData[provData.length-1].avg.toFixed(1)}`;
-    document.getElementById('price-compare-prov').style.display = 'block';
-    document.getElementById('price-stats').textContent = `🏛️ ${groupLabel} · 各省横向对比`;
-
-    const cmpCtx2 = document.getElementById('price-compare-prov-chart').getContext('2d');
-    if (PRICE_COMPARE_PROV) { PRICE_COMPARE_PROV.destroy(); PRICE_COMPARE_PROV = null; }
-
-    PRICE_COMPARE_PROV = new Chart(cmpCtx2, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: groupLabel + ' (元/MWh)',
-          data: prices,
-          backgroundColor: colors.map(c => c + '99'),
-          borderColor: colors,
-          borderWidth: 1.5,
-          borderRadius: 3
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { color: '#9aa0b0', font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.raw.toFixed(1)} 元/MWh · ${provData[ctx.dataIndex].region} · ${provData[ctx.dataIndex].count} 条`
-            }
-          },
-          annotation: false
-        },
-        scales: {
-          x: {
-            ticks: { color: '#9aa0b0', font: { size: 10 } },
-            grid: { color: 'rgba(255,255,255,0.08)' },
-            title: { display: true, text: '元/MWh', color: '#9aa0b0', font: { size: 10 } }
-          },
-          y: {
-            ticks: { color: '#9aa0b0', font: { size: 11 } },
-            grid: { display: false }
-          }
-        }
-      }
-    });
-    return; // skip summary for compare view
-  }
+  // ====== 各省对比（独立区域，支持均值/时序两种模式）======
+  renderCompareChart();
 
   // restore province selector
   document.getElementById('price-province').style.display = 'block';
-  document.getElementById('price-compare-prov').style.display = 'none';
 
   // Summary stats
   let summaryHtml = '<b>📊 数据概览</b><br>';
@@ -466,6 +374,194 @@ function renderChart() {
   if (agent) summaryHtml += `代理购电: ${agent.records.length} 个月<br>`;
   if (midLong) summaryHtml += `中长期: ${midLong.records.length} 条<br>`;
   document.getElementById('price-summary').innerHTML = summaryHtml;
+}
+
+// ====== 各省对比：均值柱状图 & 时序折线图 ======
+function renderCompareChart() {
+  if (!PRICE_DATA) return;
+  const ctx = document.getElementById('cmp-chart').getContext('2d');
+  if (window.CMP_CHART) { window.CMP_CHART.destroy(); window.CMP_CHART = null; }
+
+  const cmpType = document.getElementById('cmp-type').value;
+  const cmpMode = document.getElementById('cmp-mode').value;
+  const statsEl = document.getElementById('cmp-stats');
+
+  const regionColor = {
+    '华东': '#4fc3f7', '南方': '#81c784', '华中': '#ffb74d',
+    '华北': '#e57373', '东北': '#ba68c8', '西南': '#4dd0e1'
+  };
+  const provRegion = {
+    '江苏':'华东','浙江':'华东','安徽':'华东','福建':'华东','山东':'华东','上海':'华东','江西':'华东',
+    '广东':'南方','广西':'南方','云南':'南方','贵州':'南方','海南':'南方',
+    '河南':'华中','湖北':'华中','湖南':'华中',
+    '山西':'华北','宁夏':'华北','青海':'华北','陕西':'华北',
+    '辽宁':'东北','吉林':'东北','黑龙江':'东北',
+    '四川':'西南'
+  };
+
+  if (cmpMode === 'avg') {
+    // === 均值对比（水平柱状图）===
+    const provData = [];
+    let unit = '元/MWh';
+
+    if (cmpType === 'da' || cmpType === 'rt') {
+      const priceKey = cmpType === 'da' ? 'day_ahead' : 'real_time';
+      PRICE_DATA.spot.forEach(s => {
+        const recs = filterByTime(s[priceKey] || []);
+        if (recs.length > 0) {
+          const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
+          provData.push({ prov: s.province, avg, region: provRegion[s.province] || '其他', count: recs.length });
+        }
+      });
+    } else if (cmpType === 'agent') {
+      unit = '元/kWh';
+      PRICE_DATA.agent.forEach(a => {
+        const recs = a.records || [];
+        if (recs.length > 0) {
+          const vals = recs.filter(r => r.purchasingPrice != null).map(r => normalizeKwh(r.purchasingPrice));
+          if (vals.length > 0) {
+            const avg = vals.reduce((a,b)=>a+b,0) / vals.length;
+            provData.push({ prov: a.province, avg, region: provRegion[a.province] || '其他', count: vals.length });
+          }
+        }
+      });
+    } else if (cmpType === 'mid_long') {
+      PRICE_DATA.mid_long.forEach(m => {
+        const recs = m.records || [];
+        if (recs.length > 0) {
+          const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
+          provData.push({ prov: m.province, avg, region: provRegion[m.province] || '其他', count: recs.length });
+        }
+      });
+    }
+
+    provData.sort((a,b) => b.avg - a.avg);
+    statsEl.textContent = provData.length > 0
+      ? `${provData.length} 省 · 最高 ${provData[0].prov} ${provData[0].avg.toFixed(1)} · 最低 ${provData[provData.length-1].prov} ${provData[provData.length-1].avg.toFixed(1)}`
+      : '⚠️ 无数据';
+
+    window.CMP_CHART = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: provData.map(d => d.prov),
+        datasets: [{
+          label: unit === '元/kWh' ? '均价 (元/kWh)' : '均价 (元/MWh)',
+          data: provData.map(d => d.avg),
+          backgroundColor: provData.map(d => (regionColor[d.region] || '#9aa0b0') + '99'),
+          borderColor: provData.map(d => regionColor[d.region] || '#9aa0b0'),
+          borderWidth: 1.5, borderRadius: 3
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#9aa0b0', font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => `${ctx.raw.toFixed(unit === '元/kWh' ? 4 : 1)} ${unit} · ${provData[ctx.dataIndex].region}` } }
+        },
+        scales: {
+          x: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: unit, color: '#9aa0b0', font: { size: 10 } } },
+          y: { ticks: { color: '#9aa0b0', font: { size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+  } else {
+    // === 时序对比（多线折线图）===
+    const datasets = [];
+    let xLabels = [];
+    let unit = '元/MWh';
+
+    if (cmpType === 'da' || cmpType === 'rt') {
+      const priceKey = cmpType === 'da' ? 'day_ahead' : 'real_time';
+      // Collect all time points across all provinces
+      const timeSet = new Set();
+      PRICE_DATA.spot.forEach(s => {
+        const recs = filterByTime(s[priceKey] || []);
+        recs.forEach(r => timeSet.add(r.t));
+      });
+      xLabels = Array.from(timeSet).sort();
+      const timeIndex = {};
+      xLabels.forEach((t,i) => timeIndex[t]=i);
+
+      PRICE_DATA.spot.forEach(s => {
+        const recs = filterByTime(s[priceKey] || []);
+        if (recs.length === 0) return;
+        const data = new Array(xLabels.length).fill(null);
+        recs.forEach(r => data[timeIndex[r.t]] = r.p);
+        datasets.push({
+          label: s.province,
+          data,
+          borderColor: (regionColor[provRegion[s.province]] || '#9aa0b0'),
+          backgroundColor: (regionColor[provRegion[s.province]] || '#9aa0b0') + '33',
+          borderWidth: 1.2, pointRadius: 0, tension: 0.15,
+          hidden: !['江苏','浙江','安徽','广东','山东'].includes(s.province) // show key provinces by default
+        });
+      });
+    } else if (cmpType === 'agent') {
+      unit = '元/kWh';
+      const timeSet = new Set();
+      PRICE_DATA.agent.forEach(a => {
+        (a.records || []).forEach(r => timeSet.add(r.t));
+      });
+      xLabels = Array.from(timeSet).sort();
+      const timeIndex = {};
+      xLabels.forEach((t,i) => timeIndex[t]=i);
+
+      PRICE_DATA.agent.forEach(a => {
+        const recs = a.records || [];
+        if (recs.length === 0) return;
+        const data = new Array(xLabels.length).fill(null);
+        recs.forEach(r => data[timeIndex[r.t]] = normalizeKwh(r.purchasingPrice));
+        datasets.push({
+          label: a.province,
+          data,
+          borderColor: (regionColor[provRegion[a.province]] || '#9aa0b0'),
+          borderWidth: 1.2, pointRadius: 0, tension: 0.15,
+          hidden: !['江苏','浙江','安徽','广东','山东'].includes(a.province)
+        });
+      });
+    } else if (cmpType === 'mid_long') {
+      const timeSet = new Set();
+      PRICE_DATA.mid_long.forEach(m => {
+        (m.records || []).forEach(r => timeSet.add(r.t));
+      });
+      xLabels = Array.from(timeSet).sort();
+      const timeIndex = {};
+      xLabels.forEach((t,i) => timeIndex[t]=i);
+
+      PRICE_DATA.mid_long.forEach(m => {
+        const recs = m.records || [];
+        if (recs.length === 0) return;
+        const data = new Array(xLabels.length).fill(null);
+        recs.forEach(r => data[timeIndex[r.t]] = r.p);
+        datasets.push({
+          label: m.province,
+          data,
+          borderColor: (regionColor[provRegion[m.province]] || '#9aa0b0'),
+          borderWidth: 1.2, pointRadius: 0, tension: 0.15,
+          hidden: !['江苏','浙江','安徽','广东','山东'].includes(m.province)
+        });
+      });
+    }
+
+    statsEl.textContent = `${datasets.length} 省 · ${xLabels.length} 个时间点${cmpType === 'agent' ? '' : ' · 点击图例切换省份'}`;
+
+    window.CMP_CHART = new Chart(ctx, {
+      type: 'line',
+      data: { labels: xLabels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#9aa0b0', font: { size: 10 } } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: { ticks: { color: '#9aa0b0', font: { size: 8 }, maxTicksLimit: 15, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#9aa0b0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: unit, color: '#9aa0b0', font: { size: 10 } } }
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false }
+      }
+    });
+  }
 }
 
 init();
