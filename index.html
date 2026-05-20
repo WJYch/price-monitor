@@ -99,6 +99,8 @@ select:focus,input:focus{border-color:var(--accent)}
           <option value="mid_long">📈 中长期（月）</option>
           <option value="compare_da">🏛️ 各省对比（日前均价）</option>
           <option value="compare_rt">🏛️ 各省对比（实时均价）</option>
+          <option value="compare_agent">🏛️ 各省对比（代理购电）</option>
+          <option value="compare_mid_long">🏛️ 各省对比（中长期）</option>
         </select>
         <select id="price-range">
           <option value="1">最近 1 天</option>
@@ -106,6 +108,7 @@ select:focus,input:focus{border-color:var(--accent)}
           <option value="7" selected>最近 7 天</option>
           <option value="30">最近 30 天</option>
           <option value="90">最近 90 天</option>
+          <option value="365">最近 365 天</option>
         </select>
         <button class="btn btn-primary" id="btn-price-refresh" style="padding:6px 14px;font-size:12px">🔄 刷新数据</button>
       </div>
@@ -264,7 +267,7 @@ function renderChart() {
         labels: records.map(r => r.t),
         datasets: [{
           label: '代理购电价格',
-          data: records.map(r => r.purchasingPrice !== undefined ? (r.purchasingPrice * 1000) : null),
+          data: records.map(r => r.purchasingPrice !== undefined ? r.purchasingPrice : null),
           backgroundColor: 'rgba(129,199,132,0.6)', borderColor: '#81c784', borderWidth: 1
         }]
       },
@@ -306,10 +309,12 @@ function renderChart() {
   }
 
   // ====== 各省横向对比 ======
-  if (type === 'compare_da' || type === 'compare_rt') {
-    const priceKey = type === 'compare_da' ? 'day_ahead' : 'real_time';
+  if (type === 'compare_da' || type === 'compare_rt' || type === 'compare_agent' || type === 'compare_mid_long') {
     document.getElementById('price-province').style.display = 'none';
-    const groupLabel = type === 'compare_da' ? '日前均价' : '实时均价';
+    document.getElementById('price-compare-prov').style.display = 'none';
+
+    const typeLabels = { compare_da: '日前均价', compare_rt: '实时均价', compare_agent: '代理购电', compare_mid_long: '中长期' };
+    const groupLabel = typeLabels[type] || '电价';
 
     // Region color mapping
     const regionColor = {
@@ -326,13 +331,33 @@ function renderChart() {
     };
 
     const provData = [];
-    PRICE_DATA.spot.forEach(s => {
-      const recs = (s[priceKey] || []).filter(r => new Date(r.t.replace(' ','T')+':00') >= cutoff);
-      if (recs.length > 0) {
-        const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
-        provData.push({ prov: s.province, avg, region: provRegion[s.province] || '其他', count: recs.length });
-      }
-    });
+
+    if (type === 'compare_da' || type === 'compare_rt') {
+      const priceKey = type === 'compare_da' ? 'day_ahead' : 'real_time';
+      PRICE_DATA.spot.forEach(s => {
+        const recs = (s[priceKey] || []).filter(r => new Date(r.t.replace(' ','T')+':00') >= cutoff);
+        if (recs.length > 0) {
+          const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
+          provData.push({ prov: s.province, avg, region: provRegion[s.province] || '其他', count: recs.length });
+        }
+      });
+    } else if (type === 'compare_agent') {
+      PRICE_DATA.agent.forEach(a => {
+        const recs = (a.records || []).filter(r => new Date(r.t+'-01T00:00:00') >= cutoff);
+        if (recs.length > 0) {
+          const avg = recs.reduce((a,b)=>a+b.purchasingPrice,0) / recs.length;
+          provData.push({ prov: a.province, avg, region: provRegion[a.province] || '其他', count: recs.length });
+        }
+      });
+    } else if (type === 'compare_mid_long') {
+      PRICE_DATA.mid_long.forEach(m => {
+        const recs = (m.records || []).filter(r => new Date(r.t+'-01T00:00:00') >= cutoff);
+        if (recs.length > 0) {
+          const avg = recs.reduce((a,b)=>a+b.p,0) / recs.length;
+          provData.push({ prov: m.province, avg, region: provRegion[m.province] || '其他', count: recs.length });
+        }
+      });
+    }
     provData.sort((a,b) => b.avg - a.avg);
 
     if (provData.length === 0) {
