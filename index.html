@@ -130,10 +130,18 @@ select:focus,input:focus{border-color:var(--accent)}
         <option value="avg">📊 均值对比</option>
         <option value="ts">📈 时序对比</option>
       </select>
-      <input type="date" id="cmp-start" style="width:auto;min-width:110px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
-      <span style="color:var(--text-secondary);font-size:12px">～</span>
-      <input type="date" id="cmp-end" style="width:auto;min-width:110px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
-      <div style="font-size:12px;color:var(--text-secondary)" id="cmp-stats"></div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
+        <input type="date" id="cmp-start" style="width:auto;min-width:110px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
+        <span style="color:var(--text-secondary);font-size:12px">～</span>
+        <input type="date" id="cmp-end" style="width:auto;min-width:110px;padding:6px 10px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
+        <button class="btn btn-secondary" onclick="setCmpRange(1)" style="padding:4px 8px;font-size:11px">1天</button>
+        <button class="btn btn-secondary" onclick="setCmpRange(3)" style="padding:4px 8px;font-size:11px">3天</button>
+        <button class="btn btn-secondary" onclick="setCmpRange(7)" style="padding:4px 8px;font-size:11px">7天</button>
+        <button class="btn btn-secondary" onclick="setCmpRange(30)" style="padding:4px 8px;font-size:11px">30天</button>
+        <button class="btn btn-secondary" onclick="setCmpRange(365)" style="padding:4px 8px;font-size:11px">365天</button>
+        <button class="btn btn-secondary" onclick="setCmpRangeAll()" style="padding:4px 8px;font-size:11px">全部</button>
+        <button class="btn btn-secondary" id="btn-toggle-all-cities" onclick="toggleAllCities()" style="padding:4px 8px;font-size:11px;display:none">◎ 全部城市</button>
+      </div>
     </div>
     <div class="chart-container" style="height:480px"><canvas id="cmp-chart"></canvas></div>
   </div>
@@ -186,6 +194,40 @@ async function init() {
   document.getElementById('cmp-mode').onchange = renderCompareChart;
   document.getElementById('cmp-start').onchange = renderCompareChart;
   document.getElementById('cmp-end').onchange = renderCompareChart;
+  document.getElementById('cmp-mode').onchange = function() {
+    var btn = document.getElementById('btn-toggle-all-cities');
+    btn.style.display = this.value === 'ts' ? 'inline-flex' : 'none';
+  };
+  if (document.getElementById('cmp-mode').value === 'ts') {
+    document.getElementById('btn-toggle-all-cities').style.display = 'inline-flex';
+  }
+}
+
+function setCmpRange(days) {
+  var now = new Date();
+  var d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  document.getElementById('cmp-start').value = d.toISOString().slice(0,10);
+  document.getElementById('cmp-end').value = now.toISOString().slice(0,10);
+  renderCompareChart();
+}
+function setCmpRangeAll() {
+  document.getElementById('cmp-start').value = '';
+  document.getElementById('cmp-end').value = '';
+  renderCompareChart();
+}
+function toggleAllCities() {
+  var chart = window.CMP_CHART;
+  if (!chart) return;
+  var allVisible = true;
+  for (var i = 0; i < chart.data.datasets.length; i++) {
+    if (!chart.isDatasetVisible(i)) { allVisible = false; break; }
+  }
+  for (var i = 0; i < chart.data.datasets.length; i++) {
+    if (allVisible) { chart.hide(i); } else { chart.show(i); }
+  }
+  chart.update();
+  var btn = document.getElementById('btn-toggle-all-cities');
+  btn.textContent = allVisible ? '◎ 开启全部城市' : '◎ 关闭全部城市';
 }
 
 // Unified time filter: works for spot (YYYY-MM-DD HH:MM) and agent/mid_long (YYYY-MM-DD)
