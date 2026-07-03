@@ -191,12 +191,12 @@ async function init() {
   document.getElementById('price-type').onchange = renderChart;
   // Compare section
   document.getElementById('cmp-type').onchange = renderCompareChart;
-  document.getElementById('cmp-mode').onchange = renderCompareChart;
   document.getElementById('cmp-start').onchange = renderCompareChart;
   document.getElementById('cmp-end').onchange = renderCompareChart;
   document.getElementById('cmp-mode').onchange = function() {
     var btn = document.getElementById('btn-toggle-all-cities');
     btn.style.display = this.value === 'ts' ? 'inline-flex' : 'none';
+    renderCompareChart();
   };
   if (document.getElementById('cmp-mode').value === 'ts') {
     document.getElementById('btn-toggle-all-cities').style.display = 'inline-flex';
