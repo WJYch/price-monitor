@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 from influxdb_client import InfluxDBClient
 
 INFLUX_URL = "http://192.168.1.89:8086"
-TOKEN = "ToFZ-ewNYaj_m09su2dFb2EKJAAOX3k5nK0Wy00fS46gcItE7R24EBJb_UhKYmXCCkUoVZ1XQKX9H4e_pDcooA=="
+TOKEN="ToFZ-ewNYaj_m09su2dFb2EKJAAOX3k5nK0Wy00fS46gcItE7R24EBJb_UhKYmXCCkUoVZ1XQKX9H4e_pDcooA=="
 ORG = "shenshu"
 OUTPUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "price_data.json")
 
@@ -62,13 +62,14 @@ def fetch_agent(client, province, months=24):
     r = {"province": province, "type": "agent", "records": []}
     try:
         tables = client.query_api().query(flux)
-        seen = set()
+        seen = set()  # 按 YYYY-MM 去重（同一个月只保留第一条）
         for table in tables:
             for rec in table.records:
-                mk = to_bjt_date(rec["_time"])
+                bjt = rec["_time"].astimezone(timezone(timedelta(hours=8)))
+                mk = bjt.strftime("%Y-%m")  # 只取年月，去除日+时区偏移歧义
                 if mk in seen: continue
                 seen.add(mk)
-                entry = {"t": mk}
+                entry = {"t": mk + "-01"}  # 统一显示为当月1日
                 for f in ("purchasingPrice", "lineLossCost", "purchasingSystemOperatingCost", "purchasingSum"):
                     try: entry[f] = round(float(rec[f]), 4)
                     except: pass
@@ -89,10 +90,11 @@ def fetch_mid_long(client, province, months=24):
         seen = set()
         for table in tables:
             for rec in table.records:
-                mk = to_bjt_date(rec["_time"])
+                bjt = rec["_time"].astimezone(timezone(timedelta(hours=8)))
+                mk = bjt.strftime("%Y-%m")
                 if mk in seen: continue
                 seen.add(mk)
-                r["records"].append({"t": mk, "p": round(float(rec["price"]), 1)})
+                r["records"].append({"t": mk + "-01", "p": round(float(rec["price"]), 1)})
         r["records"].sort(key=lambda x: x["t"])
     except Exception as e:
         print(f"  ⚠️  mid_long_{province}: {e}")
