@@ -37,9 +37,9 @@ def fetch_spot(client, province, days=30):
     r = {"province": province, "type": "spot", "day_ahead": [], "real_time": []}
     qapi = client.query_api()
     for pt in ("day_ahead", "real_time"):
-        flux = f'''from(bucket: "spot_price_{province}")
+        flux = f'''from(bucket: "electricity_price")
   |> range(start: -{days}d)
-  |> filter(fn: (r) => r["priceType"] == "{pt}")
+  |> filter(fn: (r) => r["_measurement"] == "clear_price" and r["region"] == "{province}" and r["priceType"] == "{pt}")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"])'''
         try:
@@ -55,8 +55,9 @@ def fetch_spot(client, province, days=30):
     return r
 
 def fetch_agent(client, province, months=24):
-    flux = f'''from(bucket: "agent_price_{province}")
+    flux = f'''from(bucket: "electricity_price")
   |> range(start: -{months}mo)
+  |> filter(fn: (r) => r["_measurement"] == "agent_price" and r["region"] == "{province}")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"])'''
     r = {"province": province, "type": "agent", "records": []}
@@ -80,8 +81,9 @@ def fetch_agent(client, province, months=24):
     return r
 
 def fetch_mid_long(client, province, months=24):
-    flux = f'''from(bucket: "mid_long_term_price_{province}")
+    flux = f'''from(bucket: "electricity_price")
   |> range(start: -{months}mo)
+  |> filter(fn: (r) => r["_measurement"] == "mid_long_term_price" and r["region"] == "{province}")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"])'''
     r = {"province": province, "type": "mid_long", "records": []}
