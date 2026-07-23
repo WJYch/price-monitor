@@ -11,7 +11,8 @@ from influxdb_client import InfluxDBClient
 INFLUX_URL = "http://192.168.1.89:8086"
 TOKEN="ToFZ-ewNYaj_m09su2dFb2EKJAAOX3k5nK0Wy00fS46gcItE7R24EBJb_UhKYmXCCkUoVZ1XQKX9H4e_pDcooA=="
 ORG = "shenshu"
-OUTPUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "price_data.json")
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+OUTPUT = os.path.join(SCRIPT_DIR, "price_data.json")
 
 BJT = timezone(timedelta(hours=8))
 
@@ -122,7 +123,7 @@ def main():
     print(f"\n✅ {OUTPUT} ({size/1024:.1f} KB)")
 
     # Git push
-    repo = os.path.dirname(os.path.abspath(__file__))
+    repo = SCRIPT_DIR
     try:
         subprocess.run(["git", "-C", repo, "add", "price_data.json", "index.html"], check=True, capture_output=True)
         subprocess.run(["git", "-C", repo, "commit", "-m", f"price_data: update {data['generated_at']}"], check=True, capture_output=True)
