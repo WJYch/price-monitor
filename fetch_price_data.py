@@ -122,12 +122,16 @@ def main():
     size = os.path.getsize(OUTPUT)
     print(f"\n✅ {OUTPUT} ({size/1024:.1f} KB)")
 
-    # Git push
+    # Git push — clean proxy env vars that may be set by the container
+    clean_env = os.environ.copy()
+    for k in list(clean_env):
+        if k.lower() in ("http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+            del clean_env[k]
     repo = SCRIPT_DIR
     try:
-        subprocess.run(["git", "-C", repo, "add", "price_data.json", "index.html"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", repo, "commit", "-m", f"price_data: update {data['generated_at']}"], check=True, capture_output=True)
-        subprocess.run(["git", "-C", repo, "push"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", repo, "add", "price_data.json", "index.html"], check=True, capture_output=True, env=clean_env)
+        subprocess.run(["git", "-C", repo, "commit", "-m", f"price_data: update {data['generated_at']}"], check=True, capture_output=True, env=clean_env)
+        subprocess.run(["git", "-C", repo, "push"], check=True, capture_output=True, env=clean_env)
         print("  ✅ git push done")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
